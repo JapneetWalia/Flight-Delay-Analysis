@@ -1,0 +1,170 @@
+---
+title: "NYC_A"
+author: "Sankhadip"
+date: "4/17/2020"
+output: html_document
+---
+
+```{r}
+
+suppressWarnings(library(tidyverse))
+suppressWarnings(library(lubridate))
+suppressWarnings(library(plotly))
+suppressWarnings(library(caret))
+suppressWarnings(library(leaps))
+suppressWarnings(library(car))
+
+#load("/users/students/19250405/SAS_Project_Nyc Planes/Data_files/St662 Project.RData")
+load("/users/students/19250405/SAS_Project_Nyc Planes/Data_files/St662 Project imputed.RData")
+#source("/users/students/19250405/SAS_Project_Nyc Planes/Data_files/imputation.R")
+
+
+```
+
+
+```{r}
+
+pop_flight<-flights %>% group_by(carrier) %>% summarise(count=n())
+pop_flight<-pop_flight[order(pop_flight$count,decreasing = TRUE),][1:50,]
+pop_flight<- merge(pop_flight, airlines,by="carrier")
+g1<-ggplot(pop_flight, aes(
+  x = reorder(name, -count),
+  y = count,
+  fill=carrier
+  )) +
+  geom_col() +
+  xlab("Carrier Name") +
+  ylab("Count") +
+  ggtitle("Popular Carrier") +
+  theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45))
+ggplotly(g1)
+
+```
+
+Model for Arrival delay prediction
+```{r}
+#Fitted GLM model and predicted delay using some important predictors
+#Extracted records and Added the Total Delay field "Delay"
+flights.2013 <-
+  flights %>% 
+  left_join(
+    weather %>% select(
+      origin,
+      temp,
+      dewp,
+      humid,
+      wind_dir,
+      wind_speed,
+      wind_gust,
+      precip,
+      pressure,
+      visib,
+      time_hour
+    ),
+    by = c("origin", "time_hour")
+    )%>%
+  left_join(airlines, by = c("carrier" = "carrier")) %>%
+  rename(Airline = name) %>%
+  left_join(airports %>% select(faa, name, lat, lon, alt),
+            by = c("origin" = "faa"))  %>%
+  na.omit()
+
+#Which quarter of the year
+flights.2013$quarter<-as.character(quarter(flights.2013$time_hour))
+
+
+#best predictors according to their CP valuesdistance,humid,pressure,visib,quarter,lat, lng,time,carrier
+flights.2013 <- flights.2013[, -c(1:5,7,8,10:15,17:20,22,26:27,34)]
+
+# Create Training and Test data 
+set.seed(100)
+n <- nrow(flights.2013)
+trainingRows <- sample(n, 0.7*n)
+training <- flights.2013[trainingRows, ] # model training data
+test <- flights.2013[-trainingRows, ]   # test data
+
+#Fitting glm model
+glm.delay <-step(glm(arr_delay ~. , data = training), direction ="both")
+summary(glm.delay)
+
+#test correlation
+pred.step.t <- predict(glm.delay, newdata = test, type = "response")
+test$predt<-pred.step.t
+
+#correlation between actual and predicted
+cor(test$predt,test$arr_delay)*100
+
+#training correlation
+pred.step.tr <- predict(glm.delay, type = "response")
+training$predtr<-pred.step.tr
+
+#correlation between actual and predicted
+cor(training$predtr,training$arr_delay)*100
+
+
+g2<-ggplot(test, aes(
+  x = arr_delay,
+  y = predt
+  )) +
+  geom_point() +
+  geom_line(aes(x=arr_delay,y=arr_delay))+
+  xlab("Actual values") +
+  ylab("Predicted values") +
+  ggtitle("Actual vs predicted values") +
+  theme(axis.text.x = element_text(face = "bold", size = 10, angle = 45))
+ggplotly(g2)
+
+#Mean squared error value
+mean((test$predt-test$arr_delay)^2)
+
+#diagnostic plots
+plot(glm.delay)
+
+```
+
+
+
+```{r}
+
+#Error for the training dataset
+mean(residuals(glm.delay)^2)
+
+
+#Error for the test dataset
+mean((pred.step.t - test$arr_delay )^2)
+
+```
+
+```{r}
+
+set.seed(123)
+
+#CrossValidation taking 7 folds
+
+k<-7
+nrow(flights.2013)
+fold <- as.numeric(cut_number(1:nrow(flights.2013), k))
+
+#Taking Sample Fold
+fold <- sample(fold,length(fold))
+fsize <- table(fold)
+
+mse <- vector(length=k)
+
+
+#Checking Error for every K folds
+
+for (i in 1:k){
+foldi <- flights.2013[fold==i,]
+foldOther <- flights.2013[fold!=i,]
+f <- lm(arr_delay ~ ., foldOther)
+pred <- predict(f, foldi)
+mse[i] <- mean((pred - foldi$arr_delay)^2) # MSEi
+}
+
+#Mean Error for the Model
+cv<-mean(mse)
+
+```
+
+
