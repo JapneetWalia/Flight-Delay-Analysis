@@ -1,2 +1,2 @@
-# NYC-Flights-Data-2013---Analysis
-Analyzing NYC Flights data 2013 using statistical and visualization tools in R, the project majorly hovers around the delay statistics with a nuanced intervention into nearly all the possible factors.
+# NYC Flights Data 2013-Analysis
+Analyzing NYC Flights data 2013 using various statistical and visualization tools, the project majorly hovers around the delay statistics with a nuanced intervention into nearly all the possible factors. The project uses SAS and R Programming for analysis of the data on statistical grounds, while using advanced visualization extensions available in R to produce visual evidences of the results found.
